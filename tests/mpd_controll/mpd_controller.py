@@ -1,5 +1,8 @@
 #!/usr/bin/python
 
+## Created by Onkeliroh
+
+
 import sys
 
 from mpd import (MPDClient, CommandError)
@@ -40,30 +43,28 @@ def startup(client, lcd):
 	if mpdConnect(client, CON_ID):
 		lcd.clear()
 		lcd.message("Got connected!")
+		print "Got connected!"
 	else:
 		lcd.clear()
 		lcd.message("Error while connecting!")
+		print "Error while connecting!"
 		sys.exit(1)
 
-	sleep(1)
-	lcd.clear()
-
-	
 	# Auth if password is set non False
 	if PASSWORD:
 		if mpdAuth(client, PASSWORD):
 			lcd.clear()
 			lcd.message("Pass auth!")
+			print "Pass auth!"
 		else:
 			lcd.clear()
 			lcd.message("Error trying to pass auth!")
+			print "Error trying to pass auth!"
 			sys.exit(2)
 	sleep(1)
-	lcd.clear()
 	return True
 
-#Produces formated string for displaying the desired informations
-def display_status(client, lcd):
+def generate_status(client):
 	line0 = ""
 	line1 = ""
 
@@ -83,9 +84,19 @@ def display_status(client, lcd):
 		except:
 			lcd.message("ERROR greeping Info")
 
+	return (line0+"\n"+line1)
+
+#Produces formated string for displaying the desired informations
+def display_status(lcd,message):
+	lcd.backlight(lcd.BLUE)
 	lcd.clear()
-	lcd.message(line0+"\n"+line1)
+	lcd.message(message)
+	return True
 	
+#turns display off
+def idle(lcd):
+	lcd.clear()
+	lcd.backlight(lcd.OFF)
 	return True
 
 def main():
@@ -94,37 +105,44 @@ def main():
 	client = MPDClient()
 	lcd = Adafruit_CharLCDPlate(1)
 
-	lcd.backlight(lcd.BLUE)
 	lcd.clear()
 	lcd.message("Wellcome to the\nMPD Interface!")
+	print "Wellcome to the\nMPD Interface!"
 	sleep(1)
 
 	#initialize mpd connection
 	startup(client,lcd)
 
 	#Printing first known informations on lcd
-	display_status(client, lcd)
-
-	# Poll buttons, display message & set backlight accordingly
-	btn = ( (lcd.LEFT  , 'LEFT' , lcd.RED),
-			(lcd.UP    , 'UP' , lcd.ON),
-			(lcd.DOWN  , 'DOWN' , lcd.ON),
-			(lcd.RIGHT , 'RIGHT' , lcd.GREEN),
-			(lcd.SELECT, 'SELECT' , lcd.ON) )
+	message = generate_status(client)
+	display_status(lcd, message)
 
 	print client.status()
 
-	t0 = clock()
-	refresh_display = clock()
-	last_change = clock()
-	prev = -1
+	# Poll buttons, display message & set backlight accordingly
+	btn = ( (lcd.LEFT  , 'LEFT' , lcd.ON),
+			(lcd.UP    , 'UP' , lcd.ON),
+			(lcd.DOWN  , 'DOWN' , lcd.ON),
+			(lcd.RIGHT , 'RIGHT' , lcd.ON),
+			(lcd.SELECT, 'SELECT' , lcd.ON) )
+
+	t0 = clock() #start time
+	refresh_display = clock() #time of the last display refresh
+	last_action = clock() #time of the last action
+	prev = -1 # last pressed button
 	
 	while True:
+		
+		#refresh display every 0.1 sec
 		if (clock() - refresh_display >= 0.1):
-			display_status(client, lcd)
 			refresh_display = clock()
-		
-		
+			#turn display after 5 sec off
+			if (clock()-last_action <= 2.5):
+				message = generate_status(client)
+				display_status(lcd,message)
+			else:
+				idle(lcd)
+			
 		for b in btn:
 			#begin "if button pressed"
 			if lcd.buttonPressed(b[0]):
@@ -145,13 +163,13 @@ def main():
 							vol = 0
 						client.setvol(vol)
 							
-					if b[0] == lcd.RIGHT:
+					elif b[0] == lcd.RIGHT:
 						client.next()
 						
-					if b[0] == lcd.LEFT:
+					elif b[0] == lcd.LEFT:
 						client.previous()
 						
-					if b[0] == lcd.SELECT:
+					elif b[0] == lcd.SELECT:
 						if client.status()['state'] == 'play':
 							#playing
 							client.pause()
@@ -160,6 +178,7 @@ def main():
 							client.play()
 
 					t0 = clock()
+					last_action = clock()
 					prev = b
 				break
 			#end "if buffon pressed"
