@@ -30,7 +30,6 @@ def mpdConnect(client, con_id):
 		return False
 	return True
 
-
 #authentificates with mpd
 def mpdAuth(client, secret):
 	try:
@@ -67,11 +66,13 @@ def startup(client, lcd):
 def generate_status(client):
 	line0 = ""
 	line1 = ""
-
-	if client.status()['state'] == 'pause':
-		#stopped
+	
+	state = client.status()['state']
+		
+	if state == 'pause':
+		#paused
 		line1 = "PAUSED"
-	else :
+	elif state == 'play' :
 		try:
 			#try because sometimes for example streams don't have the artist name stored in 'artist' but in 'title'
 			try:
@@ -83,20 +84,70 @@ def generate_status(client):
 				line1 = title[0]
 		except:
 			lcd.message("ERROR greeping Info")
+	#MPD is stopped if playlist is emty or simply stopped by user
+	elif state == 'stop':
+		line1 = "STOPPED"
+	#just to prevent errors any unkown state is handled here
+	else:
+		line1 = "UNKNOWN STATE"
 
 	return (line0+"\n"+line1)
 
 #Produces formated string for displaying the desired informations
 def display_status(lcd,message):
-	lcd.backlight(lcd.BLUE)
-	lcd.clear()
-	lcd.message(message)
+	try:
+		lcd.backlight(lcd.BLUE)
+		lcd.clear()
+		lcd.message(message)
+	except:
+		print "Error calling LCD"
 	return True
 	
 #turns display off
 def idle(lcd):
-	lcd.clear()
-	lcd.backlight(lcd.OFF)
+	try:
+		lcd.clear()
+		lcd.backlight(lcd.OFF)
+	except:
+		print "Error calling LCD"
+	return True
+
+def BTN_UP(client):
+	vol = int(client.status()['volume'])
+	if  vol <= 90:
+		vol = vol + 10
+	else:
+		vol = 100
+	client.setvol(vol)
+	return True
+
+def BTN_DOWN(client):
+	vol = int(client.status()['volume'])
+	if  vol >= 10:
+		vol = vol - 10
+	else:
+		vol = 0
+	client.setvol(vol)
+	return True
+
+def BTN_RIGHT(client):
+	client.next()
+	return True
+	
+def BTN_LEFT(client):
+	client.previous()
+	return True
+
+def BTN_SELECT(client):
+	try:
+		if client.status()['state'] == 'play':
+			#playing
+			client.pause()
+		else:
+			#stopped
+			client.play()
+	except:
+		print "Error getting client status state"
 	return True
 
 def main():
@@ -118,6 +169,18 @@ def main():
 	display_status(lcd, message)
 
 	print client.status()
+	try:
+		print client.listplaylists()
+	except:
+		print "error"
+	try:
+		print client.listplaylist()
+	except:
+		print "error"
+	try:
+		print client.listplaylistinfo()
+	except:
+		print "error"
 
 	# Poll buttons, display message & set backlight accordingly
 	btn = ( (lcd.LEFT  , 'LEFT' , lcd.ON),
@@ -148,34 +211,19 @@ def main():
 			if lcd.buttonPressed(b[0]):
 				if (b is not prev) or (clock()-t0 >= 0.3):
 					if b[0] == lcd.UP:
-						vol = client.status()['volume']
-						if  vol <= 95:
-							vol = int(vol) + 5
-						else:
-							vol = 100
-						client.setvol(vol)
+						BTN_UP(client)
 							
-					if b[0] == lcd.DOWN:
-						vol = client.status()['volume']
-						if  vol >= 5:
-							vol = int(vol) - 5
-						else:
-							vol = 0
-						client.setvol(vol)
+					elif b[0] == lcd.DOWN:
+						BTN_DOWN(client)
 							
 					elif b[0] == lcd.RIGHT:
-						client.next()
+						BTN_RIGHT(client)
 						
 					elif b[0] == lcd.LEFT:
-						client.previous()
+						BTN_LEFT(client)
 						
 					elif b[0] == lcd.SELECT:
-						if client.status()['state'] == 'play':
-							#playing
-							client.pause()
-						else:
-							#stopped
-							client.play()
+						BTN_SELECT(client)
 
 					t0 = clock()
 					last_action = clock()
